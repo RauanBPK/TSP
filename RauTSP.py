@@ -189,6 +189,53 @@ class TSPSolver:
     def run(self):
         if self.method == "bruteforce":
             return self.solve_bruteforce()
+        elif self.method == "nearest_neighbor":
+            return self.solve_nearest_neighbor()
+
+    def solve_nearest_neighbor(self):
+        start_time = time.time()
+        if not self.cities:
+            return time.time() - start_time, [], 0
+
+        unvisited = self.cities[:]
+        current_city = unvisited.pop(0)
+        path = [current_city]
+        total_distance = 0
+
+        while unvisited:
+            nearest_city = None
+            min_dist = float('inf')
+
+            for city in unvisited:
+                if self.memo.get(f"{current_city.x}-{current_city.y}-{city.x}-{city.y}"):
+                    dist = self.memo[f"{current_city.x}-{current_city.y}-{city.x}-{city.y}"]
+                else:
+                    dist = current_city.node.calculate_heuristic(city.node)
+                    self.memo[f"{current_city.x}-{current_city.y}-{city.x}-{city.y}"] = dist
+                    self.memo[f"{city.x}-{city.y}-{current_city.x}-{current_city.y}"] = dist
+
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_city = city
+
+            current_city = nearest_city
+            unvisited.remove(current_city)
+            path.append(current_city)
+            total_distance += min_dist
+
+        # Return to start
+        if len(path) > 1:
+            first_city = path[0]
+            last_city = path[-1]
+            if self.memo.get(f"{last_city.x}-{last_city.y}-{first_city.x}-{first_city.y}"):
+                dist = self.memo[f"{last_city.x}-{last_city.y}-{first_city.x}-{first_city.y}"]
+            else:
+                dist = last_city.node.calculate_heuristic(first_city.node)
+                self.memo[f"{last_city.x}-{last_city.y}-{first_city.x}-{first_city.y}"] = dist
+                self.memo[f"{first_city.x}-{first_city.y}-{last_city.x}-{last_city.y}"] = dist
+            total_distance += dist
+
+        return time.time() - start_time, path, total_distance
 
     def solve_bruteforce(self):
         # Brute-force TSP solver (not efficient for large datasets)
@@ -226,8 +273,9 @@ class Game:
         self.window = window
         self.window_size = window_size
         self.rows = rows
-        self.max_cities = max_cities
-        self.method = method
+        # max_cities is no longer used for limiting placement, but kept in signature for compatibility if needed
+        self.methods = ["bruteforce", "nearest_neighbor"]
+        self.method = method if method else self.methods[0]
         self.total_time = 0
         self.min_cost = 0
         self.path = []
@@ -236,13 +284,19 @@ class Game:
         self.running = True
         self.game_grid = GameGrid(rows, window_size, window)
 
+    def change_method(self):
+        current_index = self.methods.index(self.method)
+        next_index = (current_index + 1) % len(self.methods)
+        self.method = self.methods[next_index]
+
     def draw_info(self, method, total_time, cost):
-        info_text = f"Method: {str.capitalize(method)} - Cost: {cost:.3f} - Execution time: {total_time:.3f}s"
+        info_text = f"Method: {str.capitalize(method)} ('M' to change) - Cost: {cost:.3f} - Execution time: {total_time:.3f}s"
         font = pygame.font.Font(
             pygame.font.get_default_font(),
             ((self.window_size * 2) - 10) // len(info_text),
         )
-        text_surface = font.render(info_text, True, Colors.BLACK)
+        color = Colors.ORANGE if total_time > 5 else Colors.BLACK
+        text_surface = font.render(info_text, True, color)
         self.window.blit(text_surface, (10, 10))
 
     def update_info(self):
@@ -288,9 +342,6 @@ class Game:
                     click_pos = pygame.mouse.get_pos()
                     clicked_cell = self.game_grid.get_clicked_cell(click_pos)
                     if clicked_cell not in self.cities:
-                        if len(self.cities) >= self.max_cities:
-                            popped_cell = self.cities.pop(0)
-                            popped_cell.change_type(NodeType.BLANK)
                         self.cities.append(clicked_cell)
                         clicked_cell.node.change_type(NodeType.START)
 
@@ -319,6 +370,10 @@ class Game:
                         self.game_grid.reset()
                         self.cities = []
                         self.path = []
+                    if event.key == pygame.K_m:  # Change method
+                        self.change_method()
+                        self.update_info()
+                        print(f"Method updated to: {self.method}")
                     if event.key == pygame.K_h:  # Change heuristic
                         self.update_info()
                         print(f"Method updated to: {self.method}")
@@ -346,7 +401,7 @@ if __name__ == "__main__":
     pygame.display.set_caption("TSP Playground")
     ROWS = 40
     MAX_CITIES = 9  # gets VERY slow after 9 cities (since it's bruteforcing for now)
-    METHOD = "bruteforce"
+    METHOD = "nearest_neighbor"
     new_game = Game(WIN, WIN.get_width(), ROWS, max_cities=MAX_CITIES, method=METHOD)
     pygame.font.init()
     new_game.run()
