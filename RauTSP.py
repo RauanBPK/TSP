@@ -273,7 +273,7 @@ class Game:
         self.window = window
         self.window_size = window_size
         self.rows = rows
-        self.max_cities = max_cities
+        # max_cities is no longer used for limiting placement, but kept in signature for compatibility if needed
         self.methods = ["bruteforce", "nearest_neighbor"]
         self.method = method if method else self.methods[0]
         self.total_time = 0
@@ -289,26 +289,14 @@ class Game:
         next_index = (current_index + 1) % len(self.methods)
         self.method = self.methods[next_index]
 
-        # Update max_cities based on method
-        if self.method == "bruteforce":
-            self.max_cities = 9
-            # Optionally trim cities if we have too many
-            if len(self.cities) > self.max_cities:
-                # Remove extras and reset them
-                extras = self.cities[self.max_cities:]
-                self.cities = self.cities[:self.max_cities]
-                for city in extras:
-                    city.reset()
-        else:
-            self.max_cities = 50 # Higher limit for faster algorithms
-
     def draw_info(self, method, total_time, cost):
         info_text = f"Method: {str.capitalize(method)} ('M' to change) - Cost: {cost:.3f} - Execution time: {total_time:.3f}s"
         font = pygame.font.Font(
             pygame.font.get_default_font(),
             ((self.window_size * 2) - 10) // len(info_text),
         )
-        text_surface = font.render(info_text, True, Colors.BLACK)
+        color = Colors.ORANGE if total_time > 5 else Colors.BLACK
+        text_surface = font.render(info_text, True, color)
         self.window.blit(text_surface, (10, 10))
 
     def update_info(self):
@@ -354,9 +342,6 @@ class Game:
                     click_pos = pygame.mouse.get_pos()
                     clicked_cell = self.game_grid.get_clicked_cell(click_pos)
                     if clicked_cell not in self.cities:
-                        if len(self.cities) >= self.max_cities:
-                            popped_cell = self.cities.pop(0)
-                            popped_cell.change_type(NodeType.BLANK)
                         self.cities.append(clicked_cell)
                         clicked_cell.node.change_type(NodeType.START)
 
@@ -416,7 +401,7 @@ if __name__ == "__main__":
     pygame.display.set_caption("TSP Playground")
     ROWS = 40
     MAX_CITIES = 9  # gets VERY slow after 9 cities (since it's bruteforcing for now)
-    METHOD = "bruteforce"
+    METHOD = "nearest_neighbor"
     new_game = Game(WIN, WIN.get_width(), ROWS, max_cities=MAX_CITIES, method=METHOD)
     pygame.font.init()
     new_game.run()
